@@ -1,0 +1,104 @@
+import customtkinter as ctk
+from PIL import Image
+import os
+import json
+import schedulepytho
+import threading
+import time
+
+class StardewNotifierApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Stardew Notifier ✨")
+        self.geometry("550x500")
+        self.resizable(False, False)
+
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("green")
+
+        self.asset_path = os.path.join(os.path.dirname(__file__), 'assets')
+        self.bg_image = ctk.CTkImage(Image.open(os.path.join(self.asset_path, "spring_bg.png")), size=(550, 500))
+        self.mascot_image = ctk.CTkImage(Image.open(os.path.join(self.asset_path, "junimo.png")), size=(80, 80))
+
+        self.bg_label = ctk.CTkLabel(self, image=self.bg_image, text="")
+        self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+
+        self.mascot_label = ctk.CTkLabel(self, image=self.mascot_image, text="")
+        self.mascot_label.place(x=30, y=30)
+
+        self.reminder_frame = ctk.CTkScrollableFrame(self, width=500, height=250)
+        self.reminder_frame.place(relx=0.5, rely=0.55, anchor="center")
+
+        self.add_button = ctk.CTkButton(self, text="+ Add Reminder", command=self.add_reminder_entry)
+        self.add_button.place(relx=0.5, rely=0.88, anchor="center")
+
+        self.save_button = ctk.CTkButton(self, text="Save All Reminders", command=self.save_reminders)
+        self.save_button.place(relx=0.5, rely=0.94, anchor="center")
+
+        self.entries = []
+        self.load_reminders()
+        self.start_scheduler_thread()
+
+    def add_reminder_entry(self, time_value="", message=""):
+        time_entry = ctk.CTkEntry(self.reminder_frame, placeholder_text="HH:MM", width=80)
+        time_entry.insert(0, time_value)
+        message_entry = ctk.CTkEntry(self.reminder_frame, placeholder_text="Reminder message...", width=300)
+        message_entry.insert(0, message)
+
+        row = len(self.entries)
+        time_entry.grid(row=row, column=0, padx=10, pady=5)
+        message_entry.grid(row=row, column=1, padx=10, pady=5)
+
+        self.entries.append((time_entry, message_entry))
+
+    def save_reminders(self):
+        reminders = []
+        for time_entry, message_entry in self.entries:
+            time_text = time_entry.get()
+            message_text = message_entry.get()
+            if time_text and message_text:
+                reminders.append({"time": time_text, "message": message_text})
+
+        with open("config.json", "w") as f:
+            json.dump(reminders, f)
+
+        print("Reminders saved! ❤️")
+        self.schedule_all_reminders(reminders)
+
+    def load_reminders(self):
+        if os.path.exists("config.json"):
+            try:
+                with open("config.json", "r") as f:
+                    reminders = json.load(f)
+                    for reminder in reminders:
+                        self.add_reminder_entry(reminder["time"], reminder["message"])
+                    self.schedule_all_reminders(reminders)
+                    print("Reminders loaded.")
+            except Exception as e:
+                print(f"Error loading reminders: {e}")
+
+    def schedule_all_reminders(self, reminders):
+        schedule.clear()
+        for reminder in reminders:
+            schedule.every().day.at(reminder["time"]).do(self.send_notification, reminder["message"])
+
+    def send_notification(self, message):
+        try:
+            from plyer import notification
+            notification.notify(
+                title="Stardew Notifier",
+                message=message,
+                timeout=5
+            )
+        except ImportError:
+            print("Plyer not installed. Cannot send notification.")
+
+    def start_scheduler_thread(self):
+        def run_scheduler():
+            while True:
+                schedule.run_pending()
+                time.sleep(1)
+
+        t = threading.Thread(target=run_scheduler, daemon=True)
+        t.start()
