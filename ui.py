@@ -2,9 +2,11 @@ import customtkinter as ctk
 from PIL import Image
 import os
 import json
-import schedulepytho
+import schedule
 import threading
 import time
+import re
+from tkinter import messagebox
 
 class StardewNotifierApp(ctk.CTk):
     def __init__(self):
@@ -45,20 +47,58 @@ class StardewNotifierApp(ctk.CTk):
         time_entry.insert(0, time_value)
         message_entry = ctk.CTkEntry(self.reminder_frame, placeholder_text="Reminder message...", width=300)
         message_entry.insert(0, message)
+        delete_button = ctk.CTkButton(self.reminder_frame, text="🗑", width=40, command=lambda: self.delete_reminder_entry(row))
 
         row = len(self.entries)
-        time_entry.grid(row=row, column=0, padx=10, pady=5)
-        message_entry.grid(row=row, column=1, padx=10, pady=5)
+        time_entry.grid(row=row, column=0, padx=5, pady=5)
+        message_entry.grid(row=row, column=1, padx=5, pady=5)
+        delete_button.grid(row=row, column=2, padx=5, pady=5)
 
-        self.entries.append((time_entry, message_entry))
+        self.entries.append((time_entry, message_entry, delete_button))
+
+    def delete_reminder_entry(self, index):
+        if 0 <= index < len(self.entries):
+            time_entry, message_entry, delete_button = self.entries[index]
+            time_entry.destroy()
+            message_entry.destroy()
+            delete_button.destroy()
+            self.entries.pop(index)
+            self.refresh_reminder_grid()
+
+    def refresh_reminder_grid(self):
+        for idx, (time_entry, message_entry, delete_button) in enumerate(self.entries):
+            time_entry.grid(row=idx, column=0, padx=5, pady=5)
+            message_entry.grid(row=idx, column=1, padx=5, pady=5)
+            delete_button.configure(command=lambda i=idx: self.delete_reminder_entry(i))
+            delete_button.grid(row=idx, column=2, padx=5, pady=5)
+
+    def validate_and_format_time(self, time_str):
+        match = re.match(r'^(\d{1,2}):(\d{2})$', time_str)
+        if not match:
+            return None
+        hour, minute = match.groups()
+        try:
+            hour = int(hour)
+            minute = int(minute)
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return f"{hour:02d}:{minute:02d}"
+        except:
+            return None
+        return None
 
     def save_reminders(self):
         reminders = []
-        for time_entry, message_entry in self.entries:
+        for time_entry, message_entry, _ in self.entries:
             time_text = time_entry.get()
             message_text = message_entry.get()
-            if time_text and message_text:
-                reminders.append({"time": time_text, "message": message_text})
+            formatted_time = self.validate_and_format_time(time_text)
+
+            if not formatted_time:
+                messagebox.showerror("Invalid Time Format", f"'{time_text}' is not a valid time. Please use HH:MM (24-hour).")
+                return
+
+            if formatted_time and message_text:
+                reminders.append({"time": formatted_time, "message": message_text})
 
         with open("config.json", "w") as f:
             json.dump(reminders, f)
